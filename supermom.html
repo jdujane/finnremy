@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Super Mom! 🌸 Mother's Day</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#1a0a2e; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:Georgia,serif; overflow:hidden; }
+#title { color:#ffb7d5; font-size:20px; letter-spacing:2px; margin-bottom:4px; text-shadow:0 0 20px #ff69b4; }
+#ui-bar { display:flex; gap:18px; color:#ffe0f0; font-size:13px; margin-bottom:4px; flex-wrap:wrap; justify-content:center; }
+canvas { border:2px solid #ff69b4; border-radius:8px; box-shadow:0 0 40px #ff69b455; display:block; }
+#instructions { color:#cc88aa; font-size:11px; margin-top:4px; letter-spacing:1px; text-align:center; }
+#overlay {
+  display:none; position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  background:linear-gradient(135deg,#3d0030,#1a0a2e);
+  border:2px solid #ff69b4; border-radius:16px; padding:30px 50px;
+  text-align:center; box-shadow:0 0 60px #ff69b477; z-index:10; min-width:380px;
+}
+#overlay h1 { color:#ffb7d5; font-size:24px; margin-bottom:10px; }
+#overlay p  { color:#ffe0f0; font-size:14px; line-height:1.8; }
+.ov-btn { margin:8px 6px 0; padding:9px 26px; background:#c0397a; border:none; border-radius:30px; color:white; font-size:14px; cursor:pointer; font-family:Georgia,serif; }
+.ov-btn:hover { background:#e0559a; }
+#shop-panel {
+  display:none; position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  background:linear-gradient(135deg,#2a0040,#1a0a2e);
+  border:2px solid #ff69b4; border-radius:14px; padding:20px 26px;
+  z-index:20; width:540px; max-height:84vh; overflow-y:auto;
+}
+#shop-panel h2 { color:#ffb7d5; text-align:center; margin-bottom:8px; font-size:18px; }
+.shop-flowers { color:#ff69b4; text-align:center; font-size:13px; margin-bottom:10px; }
+.shop-section { color:#ffb7d5; font-size:13px; font-weight:bold; margin:10px 0 5px; border-bottom:1px solid #5a1a3a; padding-bottom:2px; }
+.shop-item { display:flex; justify-content:space-between; align-items:center; background:rgba(255,105,180,0.07); border:1px solid #5a1a3a; border-radius:8px; padding:6px 10px; margin-bottom:5px; font-size:12px; color:#ffe0f0; }
+.iname { font-weight:bold; color:#ffb7d5; }
+.idesc { font-size:10px; color:#cc88aa; margin-top:1px; }
+.iprice { color:#ff69b4; white-space:nowrap; margin:0 6px; }
+.buy-btn { padding:4px 12px; background:#8b2060; border:none; border-radius:20px; color:white; font-size:11px; cursor:pointer; white-space:nowrap; }
+.buy-btn:hover { background:#c0397a; }
+.buy-btn:disabled { background:#444; cursor:default; }
+.etag { color:#88ff88; font-size:10px; margin-left:4px; }
+</style>
+</head>
+<body>
+<div id="title">✿ SUPER MOM ✿ Happy Mother's Day! 🌸</div>
+<div id="ui-bar">
+  <span>💐 <span id="hud-flowers">0</span></span>
+  <span>❤️ <span id="hud-lives">3</span></span>
+  <span>⚔️ <span id="hud-weapon">Fists</span></span>
+  <span>👗 <span id="hud-dress">Garden Dress</span></span>
+  <span>🏔️ Level <span id="hud-level">1</span>/15</span>
+</div>
+<canvas id="gameCanvas" width="860" height="460"></canvas>
+<div id="instructions">Arrow/WASD: Move &nbsp;|&nbsp; Space: Jump &nbsp;|&nbsp; Z: Attack &nbsp;|&nbsp; E near rainbow square: Shop</div>
+
+<div id="overlay">
+  <h1 id="ov-title"></h1>
+  <div id="ov-body"></div>
+  <div id="ov-btns" style="margin-top:10px;"></div>
+</div>
+
+<div id="shop-panel">
+  <h2>🌸 Mom's Shop 🌸</h2>
+  <div class="shop-flowers">💐 You have: <span id="shop-fc">0</span> flowers</div>
+  <div id="shop-content"></div>
+  <div style="text-align:center;margin-top:12px;">
+    <button class="ov-btn" onclick="closeShop()">Close Shop ✕</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const WORLD_W = 3200;
+const GROUND_Y = H - 40;
+
+// ── Input ─────────────────────────────────────────────────────────────────
+const keys = {};
+const justPressed = {};
+window.addEventListener('keydown', e => {
+  if (!keys[e.code]) justPressed[e.code] = true;
+  keys[e.code] = true;
+  e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ── Weapons ───────────────────────────────────────────────────────────────
+const WEAPONS = [
+  { id:'sword',   name:'Rose Sword',      cost:0,  desc:'Melee swing — starter weapon',            dmg:20,  range:65,  type:'melee',  cooldown:28, col:'#cc8888' },
+  { id:'spear',   name:'Lily Spear',      cost:10, desc:'Long reach melee, more damage',           dmg:35,  range:110, type:'melee',  cooldown:38, col:'#aaaaff' },
+  { id:'bow',     name:'Petal Bow',       cost:18, desc:'Ranged arrow, fast fire',                 dmg:22,  range:420, type:'ranged', cooldown:22, col:'#aacc44' },
+  { id:'wand',    name:'Magic Wand',      cost:30, desc:'Magic blast, hits area around target',    dmg:45,  range:360, type:'magic',  cooldown:48, col:'#cc44ff' },
+  { id:'hammer',  name:'Iron Hammer',     cost:45, desc:'Huge melee hit, stuns enemies briefly',   dmg:70,  range:80,  type:'melee',  cooldown:60, col:'#888888', stun:60 },
+  { id:'dualbow', name:'Twin Petal Bows', cost:60, desc:'Fires two arrows at once',                dmg:28,  range:400, type:'ranged', cooldown:20, col:'#ffcc44', twin:true },
+  { id:'storm',   name:'Storm Staff',     cost:80, desc:'Chain lightning — hits 3 enemies at once',dmg:55,  range:380, type:'magic',  cooldown:55, col:'#44ccff', chain:3 },
+];
+
+// ── Dresses ───────────────────────────────────────────────────────────────
+const DRESSES = [
+  { id:'basic',      name:'Garden Dress',    cost:0,  desc:'No special power — starter dress',        power:'none',       col:'#d63a8a' },
+  { id:'swift',      name:'Swift Gown',      cost:6,  desc:'+40% move speed',                         power:'speed',      col:'#e87a20' },
+  { id:'tough',      name:'Thorned Dress',   cost:12, desc:'Contact with enemies hurts them back',    power:'thorns',     col:'#6a3a9a' },
+  { id:'shield',     name:'Shield Gown',     cost:18, desc:'Absorbs 1 hit every 8 seconds',           power:'shield',     col:'#3a7acc' },
+  { id:'bounce',     name:'Spring Dress',    cost:24, desc:'Triple jump',                             power:'triplejump', col:'#44aa55' },
+  { id:'magnet',     name:'Magnet Gown',     cost:32, desc:'Auto-collect flowers from far away',      power:'magnet',     col:'#cc8822' },
+  { id:'fire',       name:'Flame Dress',     cost:40, desc:'Fire aura damages nearby enemies',        power:'fire',       col:'#cc3322' },
+  { id:'ice',        name:'Frost Gown',      cost:50, desc:'Hitting enemies freezes them',            power:'ice',        col:'#55ccdd' },
+  { id:'angel',      name:'Angel Dress',     cost:62, desc:'Slow fall + heal 1 life per level clear', power:'angel',      col:'#eeeeaa' },
+  { id:'queen',      name:"Queen's Gown",    cost:80, desc:'ALL powers combined — maximum power!',    power:'queen',      col:'#ffaa00' },
+];
+
+// ── Player persistent state ───────────────────────────────────────────────
+let totalFlowers = 0;
+let ownedWeapons = new Set(['sword']);
+let ownedDresses = new Set(['basic']);
+let equippedWeapon = 'sword';
+let equippedDress  = 'basic';
+
+// ── Level state ───────────────────────────────────────────────────────────
+let currentLevel = 1;
+let lives = 3;
+let player, camX;
+let platforms = [];
+let flowers = [], enemies = [], projectiles = [], bossProjectiles = [], particles = [];
+let boss = null;
+let shopSquare = null, exitDoor = null;
+let attackCooldown = 0;
+let shieldActive = false, shieldCooldown = 0;
+let fireTick = 0;
+let levelDone = false;
+let shopOpen = false;
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function getDressSpeed()  { return (equippedDress==='swift'||equippedDress==='queen') ? 5.5 : 3.8; }
+function getDressJumps()  { return (equippedDress==='bounce'||equippedDress==='queen') ? 3 : 2; }
+
+function spawnParticles(x, y, col, n=10) {
+  for (let i=0;i<n;i++) particles.push({
+    x, y, vx:(Math.random()-.5)*5, vy:(Math.random()-.5)*5-2, life:1, col, r:Math.random()*4+2
+  });
+}
+
+function updateHUD() {
+  document.getElementById('hud-flowers').textContent = totalFlowers;
+  document.getElementById('hud-lives').textContent   = lives;
+  const wp = WEAPONS.find(w=>w.id===equippedWeapon);
+  const dr = DRESSES.find(d=>d.id===equippedDress);
+  document.getElementById('hud-weapon').textContent = wp ? wp.name : 'Fists';
+  document.getElementById('hud-dress').textContent  = dr ? dr.name : 'Basic';
+  document.getElementById('hud-level').textContent  = currentLevel;
+}
+
+// ── Platform generation ───────────────────────────────────────────────────
+function makePlatforms(lvl) {
+  const p = [
+    {x:0,      y:GROUND_Y, w:600,  h:40},
+    {x:700,    y:GROUND_Y, w:600,  h:40},
+    {x:1400,   y:GROUND_Y, w:600,  h:40},
+    {x:2100,   y:GROUND_Y, w:600,  h:40},
+    {x:2600,   y:GROUND_Y, w:700,  h:40},
+  ];
+  const count = 12 + lvl;
+  for (let i=0;i<count;i++) {
+    const x = 150 + i * ((WORLD_W-300) / count);
+    const y = 190 + Math.floor(Math.random()*150);
+    const w = 200 + Math.floor(Math.random()*160);
+    p.push({x, y, w, h:18});
+  }
+  return p;
+}
+
+function makeFlowers(plats, lvl) {
+  const count = 5 + lvl;
+  const floats = plats.filter(p=>p.h===18);
+  const result = [];
+  for (let i=0;i<count;i++) {
+    const p = floats[i % floats.length];
+    const fx = Math.max(p.x+10, Math.min(p.x+p.w-10, p.x + p.w/2 + (Math.random()-.5)*60));
+    result.push({x:fx, y:p.y-22, collected:false, bob:Math.random()*Math.PI*2});
+  }
+  return result;
+}
+
+function makeEnemies(lvl) {
+  const count = Math.min(2 + Math.floor(lvl*1.3), 14);
+  const result = [];
+  for (let i=0;i<count;i++) {
+    const x = 500 + i*(WORLD_W-600)/count;
+    const hp = 18 + lvl*9;
+    result.push({
+      x, y:GROUND_Y-28, vx:(i%2?1:-1)*(0.9+lvl*0.13),
+      minX:x-200, maxX:x+200, w:28, h:28,
+      hp, maxHp:hp, dead:false, frozen:0, type:i%3
+    });
+  }
+  return result;
+}
+
+function makeBoss(lvl) {
+  const tier = lvl<=5 ? 0 : lvl<=10 ? 1 : 2;
+  const defs = [
+    {name:'Laundry Golem', col:'#7a4a2a', emoji:'🧺', hp:180+lvl*35, spd:1.8, phases:2, sz:55},
+    {name:'Kitchen Witch',  col:'#2a6a2a', emoji:'🍳', hp:300+lvl*45, spd:2.4, phases:3, sz:62},
+    {name:'Chaos Queen',    col:'#6a0a8a', emoji:'👑', hp:500+lvl*65, spd:2.9, phases:3, sz:72},
+  ];
+  const d = defs[tier];
+  return {
+    x:WORLD_W-400, y:GROUND_Y-d.sz, vx:-d.spd, w:d.sz, h:d.sz,
+    hp:d.hp, maxHp:d.hp, spd:d.spd,
+    phases:d.phases, phase:1,
+    name:d.name, col:d.col, emoji:d.emoji,
+    shootTimer:0, enraged:false, dead:false, frozen:0
+  };
+}
+
+// ── Init level ────────────────────────────────────────────────────────────
+function initLevel(lvl) {
+  currentLevel = lvl;
+  camX = 0;
+  projectiles = [];
+  bossProjectiles = [];
+  particles = [];
+  attackCooldown = 0;
+  shieldActive = false;
+  shieldCooldown = 0;
+  fireTick = 0;
+  levelDone = false;
+  shopOpen = false;
+
+  platforms = makePlatforms(lvl);
+  flowers   = makeFlowers(platforms, lvl);
+  enemies   = makeEnemies(lvl);
+  boss      = (lvl % 5 === 0) ? makeBoss(lvl) : null;
+
+  shopSquare = {x:100, y:GROUND_Y-44, w:40, h:44};
+  exitDoor   = {x:WORLD_W-180, y:GROUND_Y-75, w:52, h:75, open:false};
+
+  player = {
+    x:60, y:300, vx:0, vy:0, w:28, h:36,
+    onGround:false, dir:1, jumpCount:0, invincible:0,
+    maxJumps:getDressJumps()
+  };
+
+  document.getElementById('overlay').style.display = 'none';
+  updateHUD();
+}
+
+// ── Collision ─────────────────────────────────────────────────────────────
+function resolveCollisions() {
+  player.onGround = false;
+  for (const p of platforms) {
+    const ol = player.x+player.w - p.x;
+    const or2= p.x+p.w - player.x;
+    const ot = player.y+player.h - p.y;
+    const ob = p.y+p.h - player.y;
+    if (ol>0&&or2>0&&ot>0&&ob>0) {
+      const mh=Math.min(ol,or2), mv=Math.min(ot,ob);
+      if (mv<mh) {
+        if (ot<ob) { player.y=p.y-player.h; player.vy=0; player.onGround=true; player.jumpCount=0; }
+        else       { player.y=p.y+p.h; player.vy=0; }
+      } else {
+        if (ol<or2) player.x=p.x-player.w;
+        else        player.x=p.x+p.w;
+      }
+    }
+  }
+}
+
+// ── Attack ────────────────────────────────────────────────────────────────
+function doAttack() {
+  if (attackCooldown > 0) return;
+  const wp = WEAPONS.find(w=>w.id===equippedWeapon) || WEAPONS[0];
+  attackCooldown = wp.cooldown;
+
+  const cx = player.x + player.w/2;
+  const cy = player.y + player.h/2;
+
+  if (wp.type === 'melee') {
+    const targets = [];
+    for (const e of enemies) {
+      if (!e.dead && Math.abs(e.x+e.w/2-cx) < wp.range && Math.abs(e.y+e.h/2-cy) < 70)
+        targets.push(e);
+    }
+    for (const e of targets) {
+      hitEnemy(e, wp.dmg);
+      if (wp.stun) e.frozen = Math.max(e.frozen, wp.stun);
+    }
+    if (boss && !boss.dead && Math.abs(boss.x+boss.w/2-cx) < wp.range+boss.w/2 && Math.abs(boss.y+boss.h/2-cy) < boss.h)
+      hitBoss(wp.dmg);
+    spawnParticles(cx + player.dir*36, cy, '#ffaa44', 7);
+
+  } else {
+    // ranged / magic
+    const spd = wp.type==='magic' ? 7 : 9;
+    const col = wp.col;
+    if (wp.twin) {
+      // twin bow: two arrows
+      projectiles.push({x:cx,y:cy-4,vx:player.dir*spd,vy:0,dmg:wp.dmg,range:wp.range,traveled:0,col,w:12,h:5,aoe:false,chain:0});
+      projectiles.push({x:cx,y:cy+4,vx:player.dir*spd,vy:0,dmg:wp.dmg,range:wp.range,traveled:0,col,w:12,h:5,aoe:false,chain:0});
+    } else {
+      projectiles.push({
+        x:cx, y:cy, vx:player.dir*spd, vy:0,
+        dmg:wp.dmg, range:wp.range, traveled:0,
+        col, w:12, h:6,
+        aoe: wp.type==='magic' && !wp.chain,
+        chain: wp.chain||0
+      });
+    }
+  }
+}
+
+function hitEnemy(e, dmg) {
+  if (e.dead) return;
+  if (equippedDress==='ice'||equippedDress==='queen') e.frozen = Math.max(e.frozen, 90);
+  e.hp -= dmg;
+  spawnParticles(e.x+e.w/2-camX, e.y, '#ff4488', 6);
+  if (e.hp <= 0) {
+    e.dead = true;
+    totalFlowers += 1 + Math.floor(currentLevel/3);
+    updateHUD();
+    spawnParticles(e.x+e.w/2-camX, e.y, '#ffcc00', 14);
+  }
+}
+
+function hitBoss(dmg) {
+  if (!boss || boss.dead) return;
+  boss.hp -= dmg;
+  spawnParticles(boss.x+boss.w/2-camX, boss.y+boss.h/2, '#ff4488', 10);
+  const pct = boss.hp/boss.maxHp;
+  if (boss.phases>=2 && pct<0.5  && boss.phase===1) { boss.phase=2; boss.vx*=1.5; }
+  if (boss.phases>=3 && pct<0.25 && boss.phase===2) { boss.phase=3; boss.vx*=1.4; boss.enraged=true; }
+  if (boss.hp <= 0) {
+    boss.dead = true;
+    totalFlowers += 20 + currentLevel*4;
+    updateHUD();
+    spawnParticles(boss.x+boss.w/2-camX, boss.y, '#ffcc00', 40);
+    setTimeout(() => showLevelComplete(), 700);
+  }
+}
+
+// ── Update ────────────────────────────────────────────────────────────────
+function update() {
+  if (levelDone) return;
+  if (shopOpen) { justPressed['KeyE']=false; return; }
+
+  // shield regen
+  if (shieldCooldown>0) shieldCooldown--;
+  else if ((equippedDress==='shield'||equippedDress==='queen') && !shieldActive) shieldActive=true;
+
+  // fire aura
+  if (equippedDress==='fire'||equippedDress==='queen') {
+    fireTick++;
+    if (fireTick%45===0) {
+      for (const e of enemies) if (!e.dead && Math.abs(e.x-player.x)<65) hitEnemy(e,10);
+    }
+  }
+
+  // movement
+  const spd = getDressSpeed();
+  if      (keys['ArrowLeft'] ||keys['KeyA']) { player.vx=-spd; player.dir=-1; }
+  else if (keys['ArrowRight']||keys['KeyD']) { player.vx= spd; player.dir= 1; }
+  else player.vx *= 0.75;
+
+  // jump
+  const maxJ = getDressJumps();
+  if ((keys['Space']||keys['ArrowUp']||keys['KeyW']) && !keys['_jh'] && player.jumpCount<maxJ) {
+    player.vy=-10.5; player.jumpCount++; keys['_jh']=true;
+  }
+  if (!keys['Space']&&!keys['ArrowUp']&&!keys['KeyW']) keys['_jh']=false;
+
+  // angel slow fall
+  if ((equippedDress==='angel'||equippedDress==='queen') && player.vy>0 && (keys['Space']||keys['ArrowUp']))
+    player.vy = Math.min(player.vy, 2.2);
+
+  player.vy = Math.min(player.vy+0.5, 15);
+  player.x += player.vx;
+  player.y += player.vy;
+  resolveCollisions();
+  player.x = Math.max(0, Math.min(WORLD_W-player.w, player.x));
+
+  if (player.y > H+80) { loseLife(); return; }
+  if (player.invincible>0) player.invincible--;
+
+  camX = Math.max(0, Math.min(WORLD_W-W, player.x - W/2 + player.w/2));
+
+  // attack
+  if (attackCooldown>0) attackCooldown--;
+  if (keys['KeyZ']) doAttack();
+
+  // shop — use justPressed so it only fires once per keypress
+  if (justPressed['KeyE']) {
+    justPressed['KeyE'] = false;
+    if (shopSquare) {
+      const near = Math.abs(player.x+player.w/2 - (shopSquare.x+shopSquare.w/2)) < 70
+                && Math.abs(player.y+player.h/2 - (shopSquare.y+shopSquare.h/2)) < 70;
+      if (near) { openShop(); return; }
+    }
+  }
+  // clear other justPressed
+  for (const k in justPressed) justPressed[k]=false;
+
+  // collect flowers
+  const magRange = (equippedDress==='magnet'||equippedDress==='queen') ? 110 : 32;
+  for (const f of flowers) {
+    if (f.collected) continue;
+    f.bob += 0.05;
+    if (Math.abs(player.x+player.w/2-f.x)<magRange && Math.abs(player.y+player.h/2-f.y)<magRange) {
+      f.collected=true; totalFlowers++; updateHUD();
+      spawnParticles(f.x-camX, f.y, '#ff69b4', 10);
+    }
+  }
+
+  // player projectiles
+  for (let i=projectiles.length-1;i>=0;i--) {
+    const p=projectiles[i];
+    p.x+=p.vx; p.y+=p.vy; p.traveled+=Math.abs(p.vx);
+    let hit=false;
+    for (const e of enemies) {
+      if (!e.dead && p.x>e.x && p.x<e.x+e.w && p.y>e.y && p.y<e.y+e.h) {
+        hitEnemy(e, p.dmg);
+        if (p.aoe) for (const e2 of enemies) if (!e2.dead && Math.abs(e2.x-e.x)<90) hitEnemy(e2, p.dmg*0.5);
+        if (p.chain>0) {
+          let chained=0;
+          for (const e2 of enemies) {
+            if (!e2.dead && e2!==e && chained<p.chain) { hitEnemy(e2,p.dmg*0.6); chained++; }
+          }
+        }
+        hit=true; break;
+      }
+    }
+    if (!hit && boss && !boss.dead) {
+      if (p.x>boss.x && p.x<boss.x+boss.w && p.y>boss.y && p.y<boss.y+boss.h) {
+        hitBoss(p.dmg);
+        if (p.aoe||p.chain>0) hitBoss(p.dmg*0.25);
+        hit=true;
+      }
+    }
+    if (hit || p.traveled>p.range) projectiles.splice(i,1);
+  }
+
+  // enemy AI
+  for (const e of enemies) {
+    if (e.dead) continue;
+    if (e.frozen>0) { e.frozen--; continue; }
+    e.x+=e.vx;
+    if (e.x<e.minX||e.x+e.w>e.maxX) e.vx*=-1;
+    if (player.invincible===0) {
+      if (player.x<e.x+e.w && player.x+player.w>e.x && player.y<e.y+e.h && player.y+player.h>e.y) {
+        if (equippedDress==='thorns'||equippedDress==='queen') hitEnemy(e,18);
+        if (shieldActive) { shieldActive=false; shieldCooldown=480; }
+        else { loseLife(); return; }
+      }
+    }
+  }
+
+  // boss AI
+  if (boss && !boss.dead) {
+    if (boss.frozen>0) { boss.frozen--; }
+    else {
+      boss.x+=boss.vx;
+      if (boss.x<80 || boss.x+boss.w>WORLD_W-80) boss.vx*=-1;
+      boss.shootTimer++;
+      const rate = Math.max(25, 75 - currentLevel*2 - (boss.enraged?20:0));
+      if (boss.shootTimer>=rate) {
+        boss.shootTimer=0;
+        const dx=player.x-boss.x, dy=player.y-boss.y;
+        const dist=Math.sqrt(dx*dx+dy*dy)||1;
+        const bs=2.8+boss.phase*0.6;
+        bossProjectiles.push({x:boss.x+boss.w/2, y:boss.y+boss.h/2, vx:dx/dist*bs, vy:dy/dist*bs, r:7, col:boss.col});
+        if (boss.phase>=2) bossProjectiles.push({x:boss.x+boss.w/2, y:boss.y+boss.h/2, vx:dx/dist*bs+1.8, vy:dy/dist*bs, r:6, col:'#ff6600'});
+        if (boss.phase>=3) bossProjectiles.push({x:boss.x+boss.w/2, y:boss.y+boss.h/2, vx:dx/dist*bs-1.8, vy:dy/dist*bs, r:6, col:'#ff0088'});
+      }
+      if (player.invincible===0 && player.x<boss.x+boss.w && player.x+player.w>boss.x && player.y<boss.y+boss.h && player.y+player.h>boss.y) {
+        if (shieldActive) { shieldActive=false; shieldCooldown=480; }
+        else { loseLife(); return; }
+      }
+    }
+    for (let i=bossProjectiles.length-1;i>=0;i--) {
+      const bp=bossProjectiles[i];
+      bp.x+=bp.vx; bp.y+=bp.vy;
+      if (bp.x<0||bp.x>WORLD_W||bp.y>H+60) { bossProjectiles.splice(i,1); continue; }
+      if (player.invincible===0 && Math.abs(bp.x-player.x-player.w/2)<bp.r+10 && Math.abs(bp.y-player.y-player.h/2)<bp.r+14) {
+        if (shieldActive) { shieldActive=false; shieldCooldown=480; }
+        else loseLife();
+        bossProjectiles.splice(i,1);
+        return;
+      }
+    }
+  }
+
+  // exit door — works on non-boss levels AND after boss is dead
+  const bossCleared = !boss || boss.dead;
+  if (bossCleared && exitDoor && !levelDone) {
+    const allF = flowers.every(f=>f.collected);
+    const allE = enemies.every(e=>e.dead);
+    exitDoor.open = allF && allE;
+    if (exitDoor.open) {
+      const pcx=player.x+player.w/2, pcy=player.y+player.h/2;
+      const dcx=exitDoor.x+exitDoor.w/2, dcy=exitDoor.y+exitDoor.h/2;
+      if (Math.abs(pcx-dcx)<72 && Math.abs(pcy-dcy)<80) {
+        levelDone=true;
+        setTimeout(()=>showLevelComplete(), 300);
+      }
+    }
+  }
+
+  // particles
+  for (let i=particles.length-1;i>=0;i--) {
+    const p=particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.life-=0.028;
+    if (p.life<=0) particles.splice(i,1);
+  }
+}
+
+// ── Lose life ─────────────────────────────────────────────────────────────
+function loseLife() {
+  lives--;
+  updateHUD();
+  spawnParticles(player.x-camX+player.w/2, player.y, '#ff4488', 20);
+  if (lives<=0) {
+    levelDone=true;
+    showOverlay('💔 Oh No!',
+      `Super Mom needs a rest...<br>You reached Level ${currentLevel}!<br>Flowers saved: 💐${totalFlowers}`,
+      [{label:'Try Again 🌷', fn:'restartFromLevel()'}]);
+    return;
+  }
+  player.x=80; player.y=300; player.vx=0; player.vy=0; player.invincible=120; player.jumpCount=0;
+}
+
+// ── Shop ──────────────────────────────────────────────────────────────────
+function openShop() {
+  shopOpen=true;
+  document.getElementById('shop-panel').style.display='block';
+  renderShop();
+}
+function closeShop() {
+  shopOpen=false;
+  document.getElementById('shop-panel').style.display='none';
+}
+function renderShop() {
+  document.getElementById('shop-fc').textContent=totalFlowers;
+  let h='<div class="shop-section">⚔️ Weapons</div>';
+  for (const w of WEAPONS) {
+    const owned=ownedWeapons.has(w.id), eq=equippedWeapon===w.id;
+    h+=`<div class="shop-item">
+      <div style="flex:1"><div class="iname">${w.name}${eq?'<span class="etag">✓ equipped</span>':''}</div>
+      <div class="idesc">${w.desc} | DMG:${w.dmg}</div></div>
+      <span class="iprice">💐${w.cost}</span>
+      ${owned
+        ? `<button class="buy-btn" onclick="equipWeapon('${w.id}')">${eq?'Equipped':'Equip'}</button>`
+        : `<button class="buy-btn" ${totalFlowers<w.cost?'disabled':''} onclick="buyWeapon('${w.id}')">Buy</button>`}
+    </div>`;
+  }
+  h+='<div class="shop-section">👗 Dresses & Armor</div>';
+  for (const d of DRESSES) {
+    const owned=ownedDresses.has(d.id), eq=equippedDress===d.id;
+    h+=`<div class="shop-item">
+      <div style="flex:1"><div class="iname" style="color:${d.col}">${d.name}${eq?'<span class="etag">✓ equipped</span>':''}</div>
+      <div class="idesc">${d.desc}</div></div>
+      <span class="iprice">💐${d.cost}</span>
+      ${owned
+        ? `<button class="buy-btn" onclick="equipDress('${d.id}')">${eq?'Equipped':'Equip'}</button>`
+        : `<button class="buy-btn" ${totalFlowers<d.cost?'disabled':''} onclick="buyDress('${d.id}')">Buy</button>`}
+    </div>`;
+  }
+  document.getElementById('shop-content').innerHTML=h;
+}
+function buyWeapon(id) {
+  const w=WEAPONS.find(x=>x.id===id); if(!w||totalFlowers<w.cost) return;
+  totalFlowers-=w.cost; ownedWeapons.add(id); equippedWeapon=id; updateHUD(); renderShop();
+}
+function equipWeapon(id) { equippedWeapon=id; updateHUD(); renderShop(); }
+function buyDress(id) {
+  const d=DRESSES.find(x=>x.id===id); if(!d||totalFlowers<d.cost) return;
+  totalFlowers-=d.cost; ownedDresses.add(id); equippedDress=id;
+  player.maxJumps=getDressJumps(); updateHUD(); renderShop();
+}
+function equipDress(id) { equippedDress=id; player.maxJumps=getDressJumps(); updateHUD(); renderShop(); }
+
+// ── Overlays ──────────────────────────────────────────────────────────────
+function showOverlay(title, body, btns) {
+  document.getElementById('ov-title').innerHTML=title;
+  document.getElementById('ov-body').innerHTML=`<p>${body}</p>`;
+  document.getElementById('ov-btns').innerHTML=btns.map(b=>`<button class="ov-btn" onclick="${b.fn}">${b.label}</button>`).join('');
+  document.getElementById('overlay').style.display='block';
+}
+
+function showLevelComplete() {
+  levelDone=true;
+  if (currentLevel>=15) {
+    showOverlay('🌸 You Won! Happy Mother\'s Day! 🌸',
+      'Super Mom conquered all 15 levels!<br>You are truly incredible! 💖💐💖',
+      [{label:'Play Again 🌷', fn:'restartGame()'}]);
+    return;
+  }
+  if (equippedDress==='angel'||equippedDress==='queen') { lives=Math.min(lives+1,6); updateHUD(); }
+  showOverlay(`✅ Level ${currentLevel} Complete!`,
+    `Total flowers: 💐${totalFlowers}<br>Walk to the door on the far right!`,
+    [{label:`Level ${currentLevel+1} ➡️`, fn:'nextLevel()'}]);
+}
+
+function nextLevel()         { initLevel(currentLevel+1); }
+function restartFromLevel()  { lives=3; initLevel(currentLevel); }
+function restartGame()       {
+  lives=3; totalFlowers=0;
+  ownedWeapons=new Set(['sword']); ownedDresses=new Set(['basic']);
+  equippedWeapon='sword'; equippedDress='basic';
+  initLevel(1);
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────
+function drawBG() {
+  const hue=255+currentLevel*4;
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,`hsl(${hue},55%,11%)`);
+  g.addColorStop(1,`hsl(${hue+28},48%,26%)`);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(255,215,235,0.55)';
+  for(let i=0;i<55;i++){
+    const sx=((i*137)%(WORLD_W)-camX*0.18+WORLD_W*3)%W;
+    const sy=(i*79)%190;
+    ctx.beginPath(); ctx.arc(sx,sy,i%4===0?1.5:.7,0,Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle=`hsl(${hue},38%,17%)`;
+  for(let i=0;i<6;i++){const hx=(i*520-camX*0.28+6000)%(W+440)-220; ctx.beginPath();ctx.arc(hx,H-8,175,Math.PI,0);ctx.fill();}
+}
+
+function drawPlatforms() {
+  for (const p of platforms) {
+    const px=p.x-camX;
+    if (px+p.w<0||px>W) continue;
+    ctx.fillStyle=p.h>18?'#5a1a3a':'#8b3a62';
+    ctx.fillRect(px,p.y,p.w,p.h);
+    ctx.fillStyle=p.h>18?'#7a2a5a':'#c45a8a';
+    ctx.fillRect(px,p.y,p.w,5);
+  }
+}
+
+function drawShopSquare() {
+  if (!shopSquare) return;
+  const sx=shopSquare.x-camX;
+  const hue=(Date.now()/12)%360;
+  ctx.fillStyle=`hsl(${hue},75%,52%)`;
+  ctx.fillRect(sx,shopSquare.y,shopSquare.w,shopSquare.h);
+  ctx.fillStyle='white'; ctx.font='bold 11px Georgia';
+  ctx.fillText('SHOP',sx+3,shopSquare.y+15);
+  ctx.font='10px Georgia';
+  ctx.fillText('[E]',sx+8,shopSquare.y+29);
+}
+
+function drawExitDoor() {
+  if (!exitDoor) return;
+  const ex=exitDoor.x-camX;
+  if (ex<-70||ex>W+70) return;
+  const bossCleared=!boss||boss.dead;
+  const allF=flowers.every(f=>f.collected);
+  const allE=enemies.every(e=>e.dead);
+  const ready=bossCleared && allF && allE;
+
+  ctx.fillStyle=ready?'#cc8800':'#555';
+  ctx.fillRect(ex-7,exitDoor.y-7,exitDoor.w+14,exitDoor.h+7);
+  ctx.fillStyle=ready?'#ffcc44':'#1a1a1a';
+  ctx.fillRect(ex,exitDoor.y,exitDoor.w,exitDoor.h);
+
+  if (ready) {
+    const pulse=0.45+Math.sin(Date.now()/180)*0.35;
+    ctx.fillStyle=`rgba(255,210,60,${pulse})`;
+    ctx.fillRect(ex+5,exitDoor.y+5,exitDoor.w-10,exitDoor.h-10);
+    ctx.font='26px serif'; ctx.fillText('🌸',ex+6,exitDoor.y+exitDoor.h-14);
+    ctx.fillStyle='white'; ctx.font='bold 10px Georgia'; ctx.textAlign='center';
+    ctx.fillText('NEXT LEVEL!',ex+exitDoor.w/2,exitDoor.y-12);
+    ctx.fillStyle=`rgba(255,220,50,${pulse})`; ctx.font='16px serif';
+    ctx.fillText('➡️',ex-34,exitDoor.y+exitDoor.h/2+6);
+    ctx.textAlign='left';
+  } else {
+    const fLeft=flowers.filter(f=>!f.collected).length;
+    const eLeft=enemies.filter(e=>!e.dead).length;
+    ctx.fillStyle='#777'; ctx.font='10px Georgia'; ctx.textAlign='center';
+    ctx.fillText(`💐${fLeft} 👾${eLeft} left`,ex+exitDoor.w/2,exitDoor.y-12);
+    ctx.textAlign='left';
+    ctx.font='20px serif'; ctx.fillText('🔒',ex+12,exitDoor.y+exitDoor.h-14);
+  }
+}
+
+function drawFlowers() {
+  const t=Date.now()/1000;
+  for (const f of flowers) {
+    if (f.collected) continue;
+    const fx=f.x-camX;
+    if (fx<-30||fx>W+30) continue;
+    const bob=Math.sin(t*2+f.bob)*4;
+    ctx.strokeStyle='#55aa33'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(fx,f.y+8); ctx.lineTo(fx,f.y+24); ctx.stroke();
+    ctx.fillStyle='#ff69b4';
+    for(let i=0;i<5;i++){const a=i/5*Math.PI*2; ctx.beginPath();ctx.arc(fx+Math.cos(a)*9,f.y+bob+Math.sin(a)*9,6,0,Math.PI*2);ctx.fill();}
+    ctx.fillStyle='#ffe066'; ctx.beginPath();ctx.arc(fx,f.y+bob,4,0,Math.PI*2);ctx.fill();
+  }
+}
+
+function drawEnemies() {
+  const ecols=['#7a4a2a','#2a6a2a','#4a2a8a'];
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const ex=e.x-camX;
+    if (ex<-50||ex>W+50) continue;
+    ctx.fillStyle=e.frozen>0?'#88ddff':ecols[e.type];
+    ctx.fillRect(ex,e.y,e.w,e.h);
+    ctx.fillStyle='#ff2222'; ctx.fillRect(ex+4,e.y+6,4,4); ctx.fillRect(ex+14,e.y+6,4,4);
+    ctx.fillStyle='#333'; ctx.fillRect(ex,e.y-7,e.w,5);
+    ctx.fillStyle='#ff4466'; ctx.fillRect(ex,e.y-7,e.w*(e.hp/e.maxHp),5);
+  }
+}
+
+function drawBoss() {
+  if (!boss||boss.dead) return;
+  const bx=boss.x-camX;
+  const flash=boss.enraged && Math.floor(Date.now()/120)%2===0;
+  ctx.fillStyle=flash?'#ff2200':boss.col;
+  ctx.fillRect(bx,boss.y,boss.w,boss.h);
+  ctx.font=`${Math.floor(boss.w*0.58)}px serif`;
+  ctx.fillText(boss.emoji,bx+boss.w*0.12,boss.y+boss.h*0.76);
+  ctx.fillStyle='#111'; ctx.fillRect(bx,boss.y-14,boss.w,9);
+  ctx.fillStyle='#ff0055'; ctx.fillRect(bx,boss.y-14,boss.w*(boss.hp/boss.maxHp),9);
+  ctx.fillStyle='white'; ctx.font='10px Georgia';
+  ctx.fillText(boss.name,bx,boss.y-16);
+  for(let i=0;i<boss.phase;i++){ctx.fillStyle='#ff5500';ctx.fillRect(bx+i*15,boss.y-26,11,6);}
+}
+
+function drawBossProjectiles() {
+  for (const bp of bossProjectiles) {
+    const bpx=bp.x-camX;
+    ctx.fillStyle=bp.col;
+    ctx.beginPath(); ctx.arc(bpx,bp.y,bp.r,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.arc(bpx-1,bp.y-1,bp.r*0.45,0,Math.PI*2); ctx.fill();
+  }
+}
+
+function drawProjectiles() {
+  for (const p of projectiles) {
+    const px=p.x-camX;
+    ctx.fillStyle=p.col;
+    ctx.fillRect(px-p.w/2,p.y-p.h/2,p.w,p.h);
+    if (p.aoe||p.chain>0) {
+      ctx.fillStyle=p.col+'44';
+      ctx.beginPath(); ctx.arc(px,p.y,16,0,Math.PI*2); ctx.fill();
+    }
+  }
+}
+
+function drawPlayer() {
+  const px=player.x-camX;
+  if (player.invincible>0 && Math.floor(player.invincible/5)%2===0) return;
+  const dr=DRESSES.find(d=>d.id===equippedDress)||DRESSES[0];
+  ctx.save();
+  ctx.translate(px+player.w/2, player.y+player.h/2);
+  if (player.dir<0) ctx.scale(-1,1);
+  const hw=player.w/2, hh=player.h/2;
+
+  if (equippedDress==='queen') { ctx.shadowColor='#ffaa00'; ctx.shadowBlur=20; }
+
+  if (equippedDress==='angel'||equippedDress==='queen') {
+    ctx.fillStyle='rgba(240,240,200,0.65)';
+    ctx.beginPath(); ctx.ellipse(-hw-15,-1,15,8,0.35,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse( hw+15,-1,15,8,-0.35,0,Math.PI*2); ctx.fill();
+  }
+  if (shieldActive) {
+    ctx.strokeStyle='rgba(100,180,255,0.55)'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(0,0,24,0,Math.PI*2); ctx.stroke();
+  }
+  // dress body
+  ctx.fillStyle=dr.col;
+  ctx.fillRect(-hw,-2,player.w,hh+2);
+  // skirt
+  ctx.fillStyle=dr.col+'bb';
+  ctx.beginPath(); ctx.moveTo(-hw-6,hh); ctx.lineTo(hw+6,hh); ctx.lineTo(hw+10,hh+10); ctx.lineTo(-hw-10,hh+10); ctx.fill();
+  // blouse
+  ctx.fillStyle='#f0a0c8';
+  ctx.fillRect(-hw,-hh,player.w,hh-2);
+  // head
+  ctx.fillStyle='#f5c5a0'; ctx.beginPath(); ctx.arc(0,-hh-9,11,0,Math.PI*2); ctx.fill();
+  // hair bun
+  ctx.fillStyle='#8B4513';
+  ctx.beginPath(); ctx.arc(0,-hh-16,9,Math.PI,0); ctx.fill();
+  ctx.beginPath(); ctx.arc(0,-hh-21,5,0,Math.PI*2); ctx.fill();
+  // eyes & smile
+  ctx.fillStyle='#333'; ctx.fillRect(3,-hh-11,3,3); ctx.fillRect(-5,-hh-11,3,3);
+  ctx.strokeStyle='#333'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(0,-hh-7,4,0.2,Math.PI-0.2); ctx.stroke();
+  // arms
+  ctx.fillStyle='#f0a0c8';
+  ctx.fillRect(-hw-6,-hh+2,6,14); ctx.fillRect(hw,-hh+2,6,14);
+  // weapon visual on arm
+  const wp=WEAPONS.find(w=>w.id===equippedWeapon);
+  if (wp && attackCooldown>wp.cooldown-10) {
+    ctx.fillStyle=wp.col;
+    if (wp.type==='melee') ctx.fillRect(hw+5,-hh-3,wp.id==='hammer'?22:wp.id==='spear'?34:18,5);
+    else ctx.fillRect(hw+5,-hh+2,12,wp.twin?20:8);
+  }
+  // fire aura
+  if (equippedDress==='fire'||equippedDress==='queen') {
+    ctx.fillStyle=`rgba(255,90,0,${0.12+Math.sin(Date.now()/180)*0.1})`;
+    ctx.beginPath(); ctx.arc(0,0,28,0,Math.PI*2); ctx.fill();
+  }
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.globalAlpha=p.life; ctx.fillStyle=p.col;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawHUD() {
+  // progress bar center top
+  if (!boss || boss.dead) {
+    const fLeft=flowers.filter(f=>!f.collected).length;
+    const eLeft=enemies.filter(e=>!e.dead).length;
+    const done=fLeft===0&&eLeft===0;
+    ctx.fillStyle=done?'rgba(40,160,40,0.75)':'rgba(0,0,0,0.5)';
+    ctx.fillRect(W/2-130,8,260,22);
+    ctx.fillStyle='white'; ctx.font='bold 12px Georgia'; ctx.textAlign='center';
+    ctx.fillText(done?'✅ Walk into the door on the right! ➡️':`💐 ${fLeft} flowers  👾 ${eLeft} enemies left`, W/2,24);
+    ctx.textAlign='left';
+  }
+  // boss hp bar
+  if (boss&&!boss.dead) {
+    ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(W/2-160,7,320,17);
+    ctx.fillStyle='#ff0055'; ctx.fillRect(W/2-160,7,320*(boss.hp/boss.maxHp),17);
+    ctx.fillStyle='white'; ctx.font='bold 11px Georgia'; ctx.textAlign='center';
+    ctx.fillText(`${boss.emoji} ${boss.name}  Phase ${boss.phase}/${boss.phases}`,W/2,21);
+    ctx.textAlign='left';
+  }
+  // attack cooldown
+  if (attackCooldown>0) {
+    const wp=WEAPONS.find(w=>w.id===equippedWeapon)||{cooldown:28};
+    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(W-124,10,114,11);
+    ctx.fillStyle='#ffaa44'; ctx.fillRect(W-124,10,(1-attackCooldown/wp.cooldown)*114,11);
+    ctx.fillStyle='white'; ctx.font='9px Georgia'; ctx.fillText('ATK CD',W-120,20);
+  }
+  // shield indicator
+  if (equippedDress==='shield'||equippedDress==='queen') {
+    ctx.fillStyle=shieldActive?'rgba(80,160,255,0.7)':'rgba(80,80,80,0.5)';
+    ctx.fillRect(W-124,24,114,11);
+    ctx.fillStyle='white'; ctx.font='9px Georgia';
+    ctx.fillText(shieldActive?'🛡 READY':'🛡 CHARGING',W-120,34);
+  }
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────────
+function loop() {
+  update();
+  ctx.clearRect(0,0,W,H);
+  drawBG();
+  drawPlatforms();
+  drawShopSquare();
+  drawExitDoor();
+  drawFlowers();
+  drawEnemies();
+  drawBoss();
+  drawBossProjectiles();
+  drawProjectiles();
+  drawPlayer();
+  drawParticles();
+  drawHUD();
+  requestAnimationFrame(loop);
+}
+
+restartGame();
+loop();
+</script>
+</body>
+</html>
