@@ -3,39 +3,33 @@
 <head>
   <title>Game Arcade 🎮</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <style>
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
       background: #f2f2f7;
     }
-
     .header {
       padding: 30px 20px 10px;
       font-size: 28px;
       font-weight: 700;
     }
-
     .subheader {
       padding: 0 20px 20px;
       color: #666;
     }
-
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 16px;
       padding: 0 20px 40px;
     }
-
     .card {
       background: white;
       border-radius: 16px;
       padding: 16px;
       box-shadow: 0 6px 16px rgba(0,0,0,0.08);
     }
-
     .icon {
       width: 60px;
       height: 60px;
@@ -46,18 +40,15 @@
       font-size: 28px;
       margin-bottom: 12px;
     }
-
     .title {
       font-size: 16px;
       font-weight: 600;
     }
-
     .creator {
       font-size: 13px;
       color: #777;
       margin-bottom: 12px;
     }
-
     .play-btn {
       display: inline-block;
       padding: 8px 14px;
@@ -68,20 +59,25 @@
       font-size: 14px;
       font-weight: 500;
     }
-
     .play-btn:hover {
       opacity: 0.85;
     }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #c0006a;
+      background: #ffe6f2;
+      border-radius: 999px;
+      padding: 2px 8px;
+      margin-bottom: 6px;
+    }
   </style>
 </head>
-
 <body>
-
   <div class="header">🎮 Game Arcade</div>
   <div class="subheader">Made by Finn & Remy</div>
-
   <div class="grid">
-
     <!-- Boss Fighter -->
     <div class="card">
       <div class="icon" style="background: #ffe4e1;">⚔️</div>
@@ -89,7 +85,6 @@
       <div class="creator">by Finn</div>
       <a href="boss_fighter.html" class="play-btn">Play</a>
     </div>
-
     <!-- Mountain Climber -->
     <div class="card">
       <div class="icon" style="background: #e6f0ff;">🏔️</div>
@@ -97,8 +92,22 @@
       <div class="creator">by Remy</div>
       <a href="mountain_climber.html" class="play-btn">Play</a>
     </div>
-
+    <!-- Super Mom -->
+    <div class="card">
+      <div class="icon" style="background: #fff0f6;">🦸‍♀️</div>
+      <div class="title">Super Mom</div>
+      <div class="creator">by Remy</div>
+      <div class="badge">💐 Mother's Day</div><br>
+      <a href="supermom.html" class="play-btn">Play</a>
+    </div>
+    <!-- Mother's Day Island -->
+    <div class="card">
+      <div class="icon" style="background: #f0fff4;">🌺</div>
+      <div class="title">Mother's Day Island</div>
+      <div class="creator">by Finn</div>
+      <div class="badge">💐 Mother's Day</div><br>
+      <a href="mothers_day_island.html" class="play-btn">Play</a>
+    </div>
   </div>
-
 </body>
 </html>
